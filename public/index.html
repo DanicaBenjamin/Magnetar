@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAGNETAR — Geomagnetic Early Warning System</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="app-container">
+
+  <!-- ======================================================================
+       LEFT SIDEBAR (Deep Midnight Purple - Hardware & Serial Link)
+       ====================================================================== -->
+  <aside class="sidebar">
+    <!-- Brand & Lab Identifier -->
+    <div class="brand-header">
+      <div class="brand-title-row">
+        <h1 class="brand-title">MAGNETAR</h1>
+        <span class="brand-badge">GEO-01</span>
+      </div>
+      <p class="brand-sub">Geomagnetic Storm Early-Warning Station</p>
+    </div>
+
+    <!-- USB Serial Link Control -->
+    <div class="side-card">
+      <div class="side-card-title">
+        <span>USB Serial Link</span>
+        <div id="connStatusPill" class="connStatusPill">
+          <span class="status-dot offline"></span> OFFLINE
+        </div>
+      </div>
+
+      <div class="port-row">
+        <input type="text" id="portInput" class="port-select" value="COM7" placeholder="e.g. COM7" list="portList" style="flex: 1;">
+        <datalist id="portList">
+          <option value="COM7">COM7 (USB Serial Device)</option>
+          <option value="COM3">COM3</option>
+          <option value="COM4">COM4</option>
+          <option value="COM5">COM5</option>
+          <option value="COM6">COM6</option>
+        </datalist>
+        <button id="btnRefreshPorts" class="btn-icon" title="Rescan COM Ports">↻</button>
+      </div>
+
+      <button id="btnConnect" class="btn-primary">
+        <span>CONNECT USB</span>
+      </button>
+
+      <div id="connStatusText" style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-secondary); text-align: center;">Standby (Ready)</div>
+
+      <div class="info-table">
+        <div class="info-row">
+          <span class="info-label">Port:</span>
+          <span id="statPort" class="info-val">Disconnected</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Baud Rate:</span>
+          <span class="info-val">115200 8-N-1</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Packets RX:</span>
+          <span id="statPackets" class="info-val">0</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">State:</span>
+          <span id="statMode" class="info-val">STANDBY</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hardware Pin Reference (UNO R4 WiFi) -->
+    <div class="side-card">
+      <div class="side-card-title">
+        <span>Hardware Configuration</span>
+      </div>
+      <div class="info-table">
+        <div class="info-row">
+          <span class="info-label">Controller:</span>
+          <span class="info-val">UNO R4 WiFi (RA4M1)</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Hall Analog (A0):</span>
+          <span class="info-val">12-bit ADC (0-4095)</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Hall Digital (D7):</span>
+          <span id="statHallDo" class="info-val">DO: HIGH</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">RGB Alert (D2,3,4):</span>
+          <span class="info-val">Common Cathode</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Active Buzzer (D8):</span>
+          <span class="info-val">PWM Tone Alert</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Replay Btn (D10):</span>
+          <span class="info-val">INPUT_PULLUP</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Safety Relay (D11):</span>
+          <span id="statRelay" class="info-val">OPEN (STANDBY)</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">I2C LCD (0x27):</span>
+          <span class="info-val">16×2 Wire Display</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Presentation & Bench Controls -->
+    <div class="side-card">
+      <div class="side-card-title">
+        <span>Bench Controls</span>
+      </div>
+      
+      <button id="btnTriggerReplay" class="btn-secondary">
+        <span>▶ Start 60s Storm Replay</span>
+      </button>
+
+      <button id="btnZeroBaseline" class="btn-secondary">
+        <span>⌖ Zero Hall Baseline</span>
+      </button>
+
+      <div class="toggle-row">
+        <span>Buzzer Audio Mirror</span>
+        <label class="switch">
+          <input type="checkbox" id="audioToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <button id="btnConsoleToggle" class="btn-secondary">
+        <span>⌨ Serial Monitor Stream</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ======================================================================
+       MAIN CANVAS (Warm Parchment / Cream Background)
+       ====================================================================== -->
+  <main class="main-canvas">
+
+    <!-- TOP HERO PANEL (Large Dark Purple Card) -->
+    <section class="panel-top">
+      <div class="panel-header-row">
+        <div class="panel-title-area">
+          <h2 class="panel-title">GEOMAGNETIC DISTURBANCE MONITOR</h2>
+          <span id="sourceBadge" class="source-badge">OFFLINE STANDBY</span>
+        </div>
+
+        <!-- Threat Level Indicator -->
+        <div id="threatBadge" class="threat-level-badge level-quiet">
+          <span class="threat-tag">ALERT STATUS</span>
+          <span id="threatVal" class="threat-val">QUIET</span>
+        </div>
+      </div>
+
+      <!-- Quick Telemetry Readout Grid -->
+      <div class="top-metrics-strip">
+        <div class="metric-cell">
+          <span class="metric-cell-label">Planetary Kp Index</span>
+          <div class="metric-cell-val-row">
+            <span id="metricKp" class="metric-cell-val">1.6</span>
+            <span class="metric-cell-unit">[0-9]</span>
+          </div>
+          <span id="subtextKp" class="metric-subtext">Geomagnetic Calm</span>
+        </div>
+
+        <div class="metric-cell">
+          <span class="metric-cell-label">IMF Bz Component</span>
+          <div class="metric-cell-val-row">
+            <span id="metricBz" class="metric-cell-val">+4.2</span>
+            <span class="metric-cell-unit">nT</span>
+          </div>
+          <span id="subtextBz" class="metric-subtext">Northward (Deflecting)</span>
+        </div>
+
+        <div class="metric-cell">
+          <span class="metric-cell-label">Solar Wind Speed</span>
+          <div class="metric-cell-val-row">
+            <span id="metricSpeed" class="metric-cell-val">385</span>
+            <span class="metric-cell-unit">km/s</span>
+          </div>
+          <span id="subtextSpeed" class="metric-subtext">Nominal Stream</span>
+        </div>
+
+        <div class="metric-cell">
+          <span class="metric-cell-label">Local Field Deviation</span>
+          <div class="metric-cell-val-row">
+            <span id="metricDelta" class="metric-cell-val">+0</span>
+            <span class="metric-cell-unit">ADC units</span>
+          </div>
+          <span class="metric-subtext">Hall-Effect Probe</span>
+        </div>
+      </div>
+
+      <!-- Real-time Multi-Trace Canvas Chart -->
+      <div class="chart-container">
+        <div class="chart-header-row">
+          <span class="chart-title">REAL-TIME TELEMETRY TRACE (NOAA 60m / LIVE 60s)</span>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-color" style="background: #ff5555;"></span>
+              <span>IMF Bz (nT)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #fed857;"></span>
+              <span>Solar Wind (km/s)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #4eba86;"></span>
+              <span>Hall Deviation ΔB</span>
+            </div>
+          </div>
+        </div>
+        <canvas id="telemetryChart"></canvas>
+      </div>
+    </section>
+
+    <!-- MIDDLE ROW: TWO CARDS (Local Ground Station vs Space Weather) -->
+    <div class="middle-row">
+
+      <!-- CARD 1: Physical Arduino Hardware Mirror -->
+      <section class="panel-card">
+        <div class="card-title-row">
+          <h3 class="card-title">
+            <span>LOCAL OBSERVATORY TELEMETRY</span>
+          </h3>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <span id="badgeConfirmLevel" class="card-tag" style="background: rgba(78, 186, 134, 0.15); border-color: var(--status-quiet); color: var(--status-quiet);">CONFIRM: QUIET (0)</span>
+            <span class="card-tag">ARDUINO COM7</span>
+          </div>
+        </div>
+
+        <!-- Hall Sensor Readout -->
+        <div class="hall-readout-box">
+          <div class="hall-numbers-row">
+            <div>
+              <span class="hall-stat-label">RAW ADC (12-bit):</span>
+              <div id="hallRawVal" class="hall-stat-val">2048</div>
+            </div>
+            <div>
+              <span class="hall-stat-label">BASELINE B₀:</span>
+              <div id="hallBaselineVal" class="hall-stat-val">2048</div>
+            </div>
+            <div>
+              <span class="hall-stat-label">DEVIATION ΔB:</span>
+              <div id="hallDeltaVal" class="hall-stat-val highlight">+0 counts</div>
+            </div>
+          </div>
+
+          <!-- Bi-directional Deviation Center-Zero Meter -->
+          <div>
+            <div class="deviation-bar-track">
+              <div class="center-zero-mark"></div>
+              <div id="deviationFill" class="deviation-fill" style="left: 50%; width: 0%;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.62rem; color:var(--text-muted); margin-top:3px;">
+              <span>-300 (Severe)</span>
+              <span>-120 (Warn)</span>
+              <span>Baseline (0)</span>
+              <span>+120 (Warn)</span>
+              <span>+300 (Severe)</span>
+            </div>
+          </div>
+          
+          <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.68rem; color:var(--text-secondary); border-top:1px dashed rgba(255,255,255,0.08); padding-top:4px;">
+            <span>Thresholds: Watch ≥ 40 | Warn ≥ 120 | Severe ≥ 300</span>
+            <span id="statLocalWord" style="color:var(--accent-yellow); font-weight:700;">Word: quiet</span>
+          </div>
+        </div>
+
+        <!-- 16x2 I2C Dot Matrix LCD Mirror -->
+        <div class="lcd-container">
+          <div class="lcd-title" style="display:flex; justify-content:space-between;">
+            <span>16×2 I2C LCD SCREEN (HARDWARE MIRROR)</span>
+            <span id="lcdSrcChar" style="color:var(--accent-yellow);">MODE: [S] STORED</span>
+          </div>
+          <div class="lcd-screen">
+            <div id="lcdLine1" class="lcd-line">Space: active  S</div>
+            <div id="lcdLine2" class="lcd-line">Local: quiet    </div>
+          </div>
+        </div>
+
+        <!-- Physical Hardware Output Status (LED, Buzzer, Relay) -->
+        <div class="hw-mirror-row" style="grid-template-columns: 1fr 1fr 1fr;">
+          <div class="hw-cell">
+            <div id="hwLed" class="hw-led-indicator"></div>
+            <div class="hw-text-col">
+              <span class="hw-label">RGB (D2,3,4)</span>
+              <span id="hwLedText" class="hw-status-text">GREEN</span>
+            </div>
+          </div>
+
+          <div class="hw-cell">
+            <div style="font-size: 1.1rem;">🔊</div>
+            <div class="hw-text-col">
+              <span class="hw-label">BUZZER (D8)</span>
+              <span id="hwBuzzerText" class="hw-status-text">OFF</span>
+            </div>
+          </div>
+
+          <div class="hw-cell">
+            <div style="font-size: 1.1rem;">⚡</div>
+            <div class="hw-text-col">
+              <span class="hw-label">RELAY (D11)</span>
+              <span id="hwRelayText" class="hw-status-text" style="color:var(--status-quiet);">OPEN</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CARD 2: Space Weather & Solar Wind Telemetry -->
+      <section class="panel-card">
+        <div class="card-title-row">
+          <h3 class="card-title">
+            <span>SPACE WEATHER PARAMETERS</span>
+          </h3>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <span id="badgePredictLevel" class="card-tag" style="background: rgba(254, 216, 87, 0.15); border-color: var(--status-watch); color: var(--status-watch);">PREDICT: WATCH (1)</span>
+            <span class="card-tag">NOAA SWPC</span>
+          </div>
+        </div>
+
+        <div class="space-weather-grid">
+          <!-- Kp Metric Card -->
+          <div class="sw-metric-card">
+            <div class="sw-metric-top">
+              <span class="sw-name">PLANETARY Kp INDEX</span>
+              <span id="swKpVal" class="sw-num">1.6</span>
+            </div>
+            <div id="swKpBars" class="sw-scale-bar"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span id="swKpGScale" class="sw-desc" style="color: var(--accent-yellow); font-weight:600;">G0 (Quiet)</span>
+              <span class="sw-desc">Storm Threshold: Kp ≥ 5.0</span>
+            </div>
+          </div>
+
+          <!-- IMF Bz Metric Card -->
+          <div class="sw-metric-card">
+            <div class="sw-metric-top">
+              <span class="sw-name">INTERPLANETARY B-FIELD (Bz)</span>
+              <span id="swBzVal" class="sw-num">+4.2 nT</span>
+            </div>
+            <span id="swBzPolarity" class="sw-desc" style="color: var(--status-quiet); font-weight:600;">
+              NORTHWARD (DEFLECTING SOLAR PLASMA)
+            </span>
+            <span class="sw-desc" style="color:var(--text-muted);">
+              When Bz turns Southward (&lt; 0 nT), magnetic reconnection allows solar plasma to inject directly into Earth's magnetosphere.
+            </span>
+          </div>
+
+          <!-- Solar Wind Speed Card -->
+          <div class="sw-metric-card">
+            <div class="sw-metric-top">
+              <span class="sw-name">SOLAR WIND VELOCITY</span>
+              <span id="swSpeedVal" class="sw-num">385 km/s</span>
+            </div>
+            <span id="swSpeedStatus" class="sw-desc" style="color: var(--status-quiet); font-weight:600;">
+              Nominal Interplanetary Stream
+            </span>
+            <span class="sw-desc" style="color:var(--text-muted);">
+              Coronal Mass Ejections (CMEs) accelerate plasma to 600 - 1000+ km/s, compressing the dayside magnetopause.
+            </span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- BOTTOM RIBBON (Golden Yellow Banner - Exact Match with Drawing!) -->
+    <footer class="panel-bottom-bar">
+      <div class="bottom-assessment-col">
+        <span id="bottomEyebrow" class="bottom-eyebrow">GEOMAGNETIC THREAT ASSESSMENT & GROUND PROTOCOL</span>
+        <p id="bottomMessage" class="bottom-message">
+          Earth magnetosphere stable. Solar wind velocity nominal (~380 km/s). Northward magnetic alignment deflecting incoming solar particles. Local ground baseline steady.
+        </p>
+        <div class="bottom-pills-row">
+          <span id="pillGrid" class="bottom-pill">GRID: STABLE</span>
+          <span id="pillRadio" class="bottom-pill">RADIO: CLEAR</span>
+          <span id="pillLead" class="bottom-pill">AURORAL OVAL: POLAR REGION</span>
+        </div>
+      </div>
+
+      <div class="bottom-actions-col">
+        <button id="btnQuickReplay" class="btn-bottom" title="Trigger 60-second realistic storm presentation">
+          <span>⚡ Replay Storm (60s)</span>
+        </button>
+        <button id="btnTestSpike" class="btn-bottom" title="Inject a +38 ADC sensor surge">
+          <span>⚡ Inject Spike (+38 ADC)</span>
+        </button>
+        <button id="btnExportCsv" class="btn-bottom" title="Export session data as CSV">
+          <span>⬇ Export CSV</span>
+        </button>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- ======================================================================
+       LIVE SERIAL MONITOR DRAWER (Debug & Hackathon Inspection)
+       ====================================================================== -->
+  <div id="consoleDrawer" class="console-drawer">
+    <div class="console-header">
+      <span class="console-title">ARDUINO SERIAL MONITOR [115200 BAUD]</span>
+      <button id="consoleClose" class="btn-icon" style="height:22px; width:22px; font-size:0.75rem;">✕</button>
+    </div>
+    <div id="consoleBody" class="console-body">
+      <div class="console-line">[READY] Waiting for Arduino UNO R4 serial connection...</div>
+    </div>
+    <div class="console-footer">
+      <input type="text" id="consoleInput" class="console-input" placeholder="Type serial command (e.g. 'R' for replay, 'C' for calibrate) and press Enter...">
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
